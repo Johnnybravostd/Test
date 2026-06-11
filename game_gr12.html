@@ -192,7 +192,7 @@ body::before{
   <div class="section active" id="crosswordSection">
     <div class="crossword-header">
       <div class="cw-title">Find Your Elements</div>
-      <div class="cw-sub">Find all hidden words in the grid to unlock the main game.<br>Tap the first letter then the last letter of each word.</div>
+      <div class="cw-sub">Find all hidden words in the grid to unlock the main game.<br><strong style="color:var(--gold)">Hold and drag</strong> across the letters to select a word. Words can go across or down.</div>
       <div class="cw-bonus-note">Find all words to earn +2 bonus points!</div>
     </div>
     <div class="cw-timer-row">
@@ -356,9 +356,6 @@ let roundsWon = 0;
 let roundSequence = [];
 let usedQIndexes = {fire:[], water:[], earth:[], air:[]};
 let cwWordsFound = [];
-let cwSelectedCells = [];
-let cwFirstCell = null;
-let cwGrid = [];
 
 // ── AUDIO ──
 let audioCtx = null;
@@ -398,40 +395,52 @@ function spawnConfetti(){
 }
 
 // ── CROSSWORD ──
+// Grid layout — words placed clearly
+// CAT  — row 0, cols 0-2 (horizontal)
+// SUN  — col 4, rows 0-2 (vertical)
+// BALL — col 0, rows 1-4 (vertical)
+// TREE — row 4, cols 1-4 (horizontal)
 const CW_GRID_DATA = [
-  ['C','A','T','X','S'],
-  ['B','R','U','N','U'],
-  ['A','X','L','X','N'],
-  ['L','X','L','X','X'],
+  ['C','A','T','M','S'],
+  ['B','R','K','P','U'],
+  ['A','X','J','Q','N'],
+  ['L','D','W','V','Z'],
   ['L','T','R','E','E']
 ];
-// Word positions: CAT(0,0 h), SUN(0,4 v→row0-2 col4? No - let's define)
-// Actually let's define exact positions
 const WORD_POSITIONS = {
-  CAT:{cells:[[0,0],[0,1],[0,2]]},
-  SUN:{cells:[[0,4],[1,4],[2,4]]}, // wait SUN is vertical
-  BALL:{cells:[[1,0],[2,0],[3,0],[4,0]]},
-  TREE:{cells:[[4,1],[4,2],[4,3],[4,4]]}
+  CAT: [[0,0],[0,1],[0,2]],
+  SUN: [[0,4],[1,4],[2,4]],
+  BALL:[[1,0],[2,0],[3,0],[4,0]],
+  TREE:[[4,1],[4,2],[4,3],[4,4]]
 };
+
+let cwDragging=false;
+let cwDragCells=[];
 
 function initCrossword(){
   document.getElementById('phaseLabel').textContent='Crossword Gate — Grade 1 & 2';
   // Build word chips
   const chips=document.getElementById('wordChips');chips.innerHTML='';
   CROSSWORD_WORDS.forEach(w=>{
-    const d=document.createElement('div');d.className='word-chip';d.id='chip_'+w;d.textContent=w;chips.appendChild(d);
+    const d=document.createElement('div');
+    d.className='word-chip';d.id='chip_'+w;
+    d.textContent=w;chips.appendChild(d);
   });
   // Build grid
-  const grid=document.getElementById('crosswordGrid');grid.innerHTML='';
+  const grid=document.getElementById('crosswordGrid');
+  grid.innerHTML='';
+  grid.style.touchAction='none';
   CW_GRID_DATA.forEach((row,r)=>{
     row.forEach((letter,c)=>{
       const cell=document.createElement('div');
-      cell.className='cell';cell.textContent=letter;
-      cell.dataset.r=r;cell.dataset.c=c;
-      cell.addEventListener('click',()=>cwCellClick(r,c,cell));
+      cell.className='cell';
+      cell.textContent=letter;
+      cell.dataset.r=r;
+      cell.dataset.c=c;
       grid.appendChild(cell);
     });
   });
+  setupCwEvents();
   // Start timer
   let cwSecs=90;
   document.getElementById('cwTime').textContent='1:30';
@@ -441,52 +450,103 @@ function initCrossword(){
     document.getElementById('cwTime').textContent=m+':'+s;
     const bar=document.getElementById('cwBar');
     bar.style.width=(cwSecs/90*100)+'%';
-    if(cwSecs<=30){bar.style.background='linear-gradient(90deg,#c2410c,var(--err))';document.getElementById('cwTime').style.color='var(--err)';}
-    if(cwSecs<=0){clearInterval(cwTimer);document.getElementById('skipBtn').style.display='block';}
+    if(cwSecs<=30){
+      bar.style.background='linear-gradient(90deg,#c2410c,var(--err))';
+      document.getElementById('cwTime').style.color='var(--err)';
+    }
+    if(cwSecs<=0){
+      clearInterval(cwTimer);
+      document.getElementById('skipBtn').style.display='block';
+    }
   },1000);
 }
-function cwCellClick(r,c,cell){
-  if(cwFirstCell===null){
-    cwFirstCell={r,c,cell};cell.classList.add('selected');
-  }else{
-    // Check if selection makes a valid word
-    const r1=cwFirstCell.r,c1=cwFirstCell.c;
-    const dr=r-r1,dc=c-c1;
-    let cells=[];
-    // Horizontal
-    if(dr===0&&dc>0){for(let i=0;i<=dc;i++)cells.push([r1,c1+i]);}
-    // Vertical
-    else if(dc===0&&dr>0){for(let i=0;i<=dr;i++)cells.push([r1+i,c1]);}
-    // Reverse horizontal
-    else if(dr===0&&dc<0){for(let i=0;i>=dc;i--)cells.push([r1,c1+i]);}
-    // Reverse vertical
-    else if(dc===0&&dr<0){for(let i=0;i>=dr;i--)cells.push([r1+i,c1]);}
 
-    if(cells.length>0){
-      const word=cells.map(([row,col])=>CW_GRID_DATA[row][col]).join('');
-      if(CROSSWORD_WORDS.includes(word)&&!cwWordsFound.includes(word)){
-        cwWordsFound.push(word);
-        sndWord();
-        cells.forEach(([row,col])=>{
-          const idx=row*CROSSWORD_SIZE+col;
-          document.querySelectorAll('.cell')[idx].classList.add('found');
-          document.querySelectorAll('.cell')[idx].classList.remove('selected');
-        });
-        document.getElementById('chip_'+word).classList.add('found');
-        if(cwWordsFound.length===CROSSWORD_WORDS.length){
-          clearInterval(cwTimer);
-          score+=2;updateScore();
-          setTimeout(startGame,800);
-        }
-      }else{
-        // Clear selection
-        document.querySelectorAll('.cell').forEach(c=>c.classList.remove('selected'));
-      }
-    }else{
-      document.querySelectorAll('.cell').forEach(c=>c.classList.remove('selected'));
+function setupCwEvents(){
+  const grid=document.getElementById('crosswordGrid');
+
+  // Mouse events
+  grid.addEventListener('mousedown',e=>{
+    const cell=e.target.closest('.cell');
+    if(!cell||cell.classList.contains('found'))return;
+    cwDragging=true;cwDragCells=[];
+    highlightDragCell(cell);
+    e.preventDefault();
+  });
+  grid.addEventListener('mousemove',e=>{
+    if(!cwDragging)return;
+    const cell=e.target.closest('.cell');
+    if(cell&&!cell.classList.contains('found'))highlightDragCell(cell);
+  });
+  document.addEventListener('mouseup',()=>{
+    if(cwDragging){cwDragging=false;checkCwSelection();}
+  });
+
+  // Touch events
+  grid.addEventListener('touchstart',e=>{
+    const touch=e.touches[0];
+    const cell=document.elementFromPoint(touch.clientX,touch.clientY);
+    if(!cell||!cell.classList.contains('cell')||cell.classList.contains('found'))return;
+    cwDragging=true;cwDragCells=[];
+    highlightDragCell(cell);
+    e.preventDefault();
+  },{passive:false});
+  grid.addEventListener('touchmove',e=>{
+    if(!cwDragging)return;
+    const touch=e.touches[0];
+    const cell=document.elementFromPoint(touch.clientX,touch.clientY);
+    if(cell&&cell.classList.contains('cell')&&!cell.classList.contains('found'))
+      highlightDragCell(cell);
+    e.preventDefault();
+  },{passive:false});
+  grid.addEventListener('touchend',()=>{
+    if(cwDragging){cwDragging=false;checkCwSelection();}
+  });
+}
+
+function highlightDragCell(cell){
+  const r=parseInt(cell.dataset.r),c=parseInt(cell.dataset.c);
+  // Only allow straight lines
+  if(cwDragCells.length>0){
+    const first=cwDragCells[0];
+    const last=cwDragCells[cwDragCells.length-1];
+    const dr=r-first.r,dc=c-first.c;
+    // Must be horizontal or vertical
+    if(dr!==0&&dc!==0)return;
+    // Check direction consistency
+    if(cwDragCells.length>1){
+      const dir={r:last.r-first.r>0?1:last.r-first.r<0?-1:0,c:last.c-first.c>0?1:last.c-first.c<0?-1:0};
+      const newDir={r:r-last.r>0?1:r-last.r<0?-1:0,c:c-last.c>0?1:c-last.c<0?-1:0};
+      if((newDir.r!==0||newDir.c!==0)&&(newDir.r!==dir.r||newDir.c!==dir.c))return;
     }
-    cwFirstCell=null;
   }
+  // Avoid duplicates
+  if(cwDragCells.some(x=>x.r===r&&x.c===c))return;
+  cwDragCells.push({r,c,cell});
+  cell.classList.add('selected');
+}
+
+function checkCwSelection(){
+  const word=cwDragCells.map(x=>CW_GRID_DATA[x.r][x.c]).join('');
+  const wordRev=word.split('').reverse().join('');
+  const matched=CROSSWORD_WORDS.find(w=>w===word||w===wordRev);
+  if(matched&&!cwWordsFound.includes(matched)){
+    cwWordsFound.push(matched);
+    sndWord();
+    cwDragCells.forEach(({cell})=>{
+      cell.classList.remove('selected');
+      cell.classList.add('found');
+    });
+    document.getElementById('chip_'+matched).classList.add('found');
+    if(cwWordsFound.length===CROSSWORD_WORDS.length){
+      clearInterval(cwTimer);
+      score+=2;updateScore();
+      setTimeout(startGame,800);
+    }
+  }else{
+    // Clear selection
+    cwDragCells.forEach(({cell})=>cell.classList.remove('selected'));
+  }
+  cwDragCells=[];
 }
 function skipCrossword(){
   clearInterval(cwTimer);
