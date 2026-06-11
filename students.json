@@ -1,0 +1,14 @@
+{
+  "DA001": {"name": "Amaka Okonkwo", "grade": 1},
+  "DA002": {"name": "Emeka Nwosu", "grade": 2},
+  "DA003": {"name": "Fatima Bello", "grade": 3},
+  "DA004": {"name": "Chidi Eze", "grade": 4},
+  "DA005": {"name": "Ngozi Adeyemi", "grade": 5},
+  "DA006": {"name": "Tunde Fashola", "grade": 6},
+  "DA007": {"name": "Aisha Musa", "grade": 7},
+  "DA008": {"name": "Obinna Obi", "grade": 8},
+  "DA009": {"name": "Chisom Ike", "grade": 9},
+  "DA010": {"name": "Yusuf Dantata", "grade": 10},
+  "DA011": {"name": "Blessing Eze", "grade": 11},
+  "DA012": {"name": "Kemi Adeleke", "grade": 12}
+}
