@@ -384,7 +384,7 @@ let musicStarted = false;
 function initAudio(){
   try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
   if(!bgAudio){
-    bgAudio = new Audio('https://johnnybravostd.github.io/Test/bgmusic.mp3');
+    bgAudio = new Audio('bgmusic.mp3');
     bgAudio.loop = true;
     bgAudio.volume = 0.3;
   }
