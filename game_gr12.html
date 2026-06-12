@@ -274,6 +274,24 @@ body::before{
   </div>
 </div>
 
+<!-- SOUND CONTROL -->
+<div style="position:fixed;bottom:14px;right:14px;z-index:300">
+  <button id="soundBtn" onclick="toggleSound()" style="
+    background:rgba(13,20,32,.92);backdrop-filter:blur(8px);
+    border:1px solid rgba(245,200,66,.2);border-radius:10px;
+    padding:8px 14px;font-size:11px;color:var(--gold);
+    cursor:pointer;display:flex;align-items:center;gap:6px;
+    font-family:'Syne',sans-serif;transition:all .2s;
+    box-shadow:0 2px 12px rgba(0,0,0,.4)">
+    <svg id="soundIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+    </svg>
+    <span id="soundLabel">Sound ON</span>
+  </button>
+</div>
+
 <!-- BONUS OVERLAY -->
 <div class="bonus-overlay" id="bonusOverlay">
   <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);margin-bottom:1rem;opacity:.8">Surprise Bonus!</div>
@@ -358,21 +376,112 @@ let usedQIndexes = {fire:[], water:[], earth:[], air:[]};
 let cwWordsFound = [];
 
 // ── AUDIO ──
+const BG_MUSIC_URL = 'https://johnnybravostd.github.io/Games/paulyudin-war-game-158615.mp3';
+let bgAudio = null;
 let audioCtx = null;
-function initAudio(){try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
-function playTone(f,t,d,v,dl=0){
-  if(!audioCtx)return;
-  try{const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-    o.connect(g);g.connect(audioCtx.destination);o.type=t;o.frequency.value=f;
-    const ts=audioCtx.currentTime+dl;
-    g.gain.setValueAtTime(0,ts);g.gain.linearRampToValueAtTime(v,ts+.01);g.gain.exponentialRampToValueAtTime(.001,ts+d);
-    o.start(ts);o.stop(ts+d);}catch(e){}}
-function sndCorrect(){playTone(523,'sine',.1,.25);playTone(659,'sine',.12,.25,.08);playTone(784,'sine',.16,.25,.16);}
-function sndWrong(){playTone(220,'sawtooth',.15,.2);playTone(165,'sawtooth',.18,.16,.09);}
-function sndWord(){[523,659,784,1047].forEach((f,i)=>playTone(f,'sine',.15,.28,i*.07));}
-function sndBonus(){[523,659,784,523,659,784,1047].forEach((f,i)=>playTone(f,'sine',.18,.35,i*.09));}
-function sndVictory(){[523,659,784,659,784,1047,1047].forEach((f,i)=>playTone(f,'sine',.2,.35,i*.1));}
+let soundEnabled = true;
 
+function initAudio(){
+  try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  if(!bgAudio){
+    bgAudio = new Audio(BG_MUSIC_URL);
+    bgAudio.loop = true;
+    bgAudio.volume = 0.3;
+  }
+}
+
+function playBg(){
+  if(!soundEnabled||!bgAudio)return;
+  bgAudio.play().catch(()=>{});
+}
+
+function stopBg(){
+  if(!bgAudio)return;
+  bgAudio.pause();
+  bgAudio.currentTime=0;
+}
+
+function fadeBg(target,dur){
+  if(!bgAudio)return;
+  const start=bgAudio.volume,diff=target-start,steps=20,st=dur/steps;
+  let i=0;
+  const iv=setInterval(()=>{
+    i++;bgAudio.volume=Math.max(0,Math.min(1,start+(diff*i/steps)));
+    if(i>=steps){clearInterval(iv);if(target===0)bgAudio.pause();}
+  },st);
+}
+
+function toggleSound(){
+  soundEnabled=!soundEnabled;
+  const btn=document.getElementById('soundBtn');
+  const icon=document.getElementById('soundIcon');
+  const lbl=document.getElementById('soundLabel');
+  if(soundEnabled){
+    lbl.textContent='Sound ON';
+    btn.style.borderColor='rgba(245,200,66,.2)';
+    btn.style.color='var(--gold)';
+    icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+    playBg();
+  }else{
+    lbl.textContent='Sound OFF';
+    btn.style.borderColor='rgba(255,255,255,.1)';
+    btn.style.color='var(--muted)';
+    icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
+    if(bgAudio)bgAudio.pause();
+  }
+}
+
+function playTone(f,t,d,v,dl=0){
+  if(!soundEnabled||!audioCtx)return;
+  try{
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    o.type=t;o.frequency.value=f;
+    const ts=audioCtx.currentTime+dl;
+    g.gain.setValueAtTime(0,ts);
+    g.gain.linearRampToValueAtTime(v,ts+.01);
+    g.gain.exponentialRampToValueAtTime(.001,ts+d);
+    o.start(ts);o.stop(ts+d);
+  }catch(e){}
+}
+
+// ── SOUND EFFECTS ──
+// Correct answer — three rising bright tones
+function sndCorrect(){
+  playTone(523,'sine',.1,.28);
+  playTone(659,'sine',.12,.28,.09);
+  playTone(784,'sine',.18,.28,.18);
+}
+// Wrong answer — two falling dull tones
+function sndWrong(){
+  playTone(300,'sawtooth',.18,.22);
+  playTone(200,'sawtooth',.2,.18,.12);
+}
+// Word found in crossword — bright chime sequence
+function sndWord(){
+  [523,659,784,1047].forEach((f,i)=>playTone(f,'sine',.15,.3,i*.07));
+}
+// Wager confirmed — single clean click
+function sndWager(){
+  playTone(440,'sine',.08,.2);
+  playTone(554,'sine',.1,.15,.06);
+}
+// Round complete — short upward fanfare
+function sndRoundComplete(){
+  [392,494,587,784].forEach((f,i)=>playTone(f,'sine',.2,.3,i*.1));
+}
+// Bonus revealed — dramatic rising fanfare
+function sndBonus(){
+  [262,330,392,523,659,784].forEach((f,i)=>playTone(f,'sine',.2,.35,i*.09));
+}
+// Game over / time up — descending sad tones
+function sndGameOver(){
+  [440,370,311,261].forEach((f,i)=>playTone(f,'sine',.3,.3,i*.15));
+}
+// Victory — full celebratory fanfare
+function sndVictory(){
+  [523,659,784,659,784,1047,784,1047,1319].forEach((f,i)=>playTone(f,'sine',.22,.38,i*.1));
+}
 // ── HELPERS ──
 function showSection(id){
   document.querySelectorAll('.section').forEach(s=>{s.classList.remove('active');});
@@ -456,6 +565,7 @@ function initCrossword(){
     }
     if(cwSecs<=0){
       clearInterval(cwTimer);
+      sndGameOver();
       document.getElementById('skipBtn').style.display='block';
     }
   },1000);
@@ -600,6 +710,7 @@ function startRound(){
 
 function confirmWager(){
   if(!wager)return;
+  sndWager();
   showQuestion();
 }
 
@@ -711,7 +822,7 @@ function processAnswer(correct,correctAns){
     sndWrong();
   }
   updateScore();
-  setTimeout(()=>{currentRound++;startRound();},2000);
+  setTimeout(()=>{sndRoundComplete();currentRound++;startRound();},2000);
 }
 
 // ── BONUS ──
@@ -746,6 +857,7 @@ function closeBonusNoScore(){
 // ── LEADERBOARD ──
 function showLeaderboard(){
   clearInterval(qTimer);
+  fadeBg(0,1500);
   document.getElementById('progFill').style.width='100%';
   document.getElementById('phaseLabel').textContent='You have found your element!';
   showSection('leaderboardSection');
@@ -793,6 +905,7 @@ document.addEventListener('keydown',e=>{
 // ── INIT ──
 window.addEventListener('load',()=>{
   initAudio();
+  playBg();
   document.getElementById('phaseLabel').textContent='Grade 1 & 2 — Find Your Elements';
   initCrossword();
 });
