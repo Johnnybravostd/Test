@@ -376,7 +376,6 @@ let usedQIndexes = {fire:[], water:[], earth:[], air:[]};
 let cwWordsFound = [];
 
 // ── AUDIO ──
-const BG_MUSIC_URL = 'https://johnnybravostd.github.io/Games/paulyudin-war-game-158615.mp3';
 let bgAudio = null;
 let audioCtx = null;
 let soundEnabled = true;
@@ -384,15 +383,26 @@ let soundEnabled = true;
 function initAudio(){
   try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
   if(!bgAudio){
-    bgAudio = new Audio(BG_MUSIC_URL);
+    bgAudio = new Audio();
+    bgAudio.src = 'https://johnnybravostd.github.io/Games/paulyudin-war-game-158615.mp3';
     bgAudio.loop = true;
-    bgAudio.volume = 0.3;
+    bgAudio.volume = 0.35;
+    bgAudio.preload = 'auto';
+    bgAudio.onerror = ()=>{console.log('Music failed to load — check filename on GitHub');};
   }
 }
 
 function playBg(){
   if(!soundEnabled||!bgAudio)return;
-  bgAudio.play().catch(()=>{});
+  // Resume audio context if suspended (browser autoplay policy)
+  if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();
+  const promise = bgAudio.play();
+  if(promise!==undefined){
+    promise.catch(e=>{
+      // Autoplay blocked — will try again on next user interaction
+      console.log('Autoplay blocked:', e);
+    });
+  }
 }
 
 function stopBg(){
@@ -905,10 +915,18 @@ document.addEventListener('keydown',e=>{
 // ── INIT ──
 window.addEventListener('load',()=>{
   initAudio();
-  playBg();
   document.getElementById('phaseLabel').textContent='Grade 1 & 2 — Find Your Elements';
   initCrossword();
 });
+
+// Start music on first touch or click anywhere — handles browser autoplay policy
+let musicStarted = false;
+document.addEventListener('click', ()=>{
+  if(!musicStarted&&soundEnabled){musicStarted=true;playBg();}
+}, {once:false});
+document.addEventListener('touchstart', ()=>{
+  if(!musicStarted&&soundEnabled){musicStarted=true;playBg();}
+}, {once:false, passive:true});
 </script>
 </body>
 </html>
